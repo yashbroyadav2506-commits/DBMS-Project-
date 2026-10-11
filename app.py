@@ -1,4 +1,5 @@
 import time
+import mysql.connector
 from flask import Flask, render_template, request, session, jsonify
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -58,34 +59,55 @@ app.register_blueprint(schema_alter_bp)
 # Register Database Teardown
 app.teardown_appcontext(close_db)
 
-# ----------------- HEALTH CHECK ROUTE -----------------
+# ----------------- HEALTH CHECK ROUTES -----------------
 @app.route('/health')
-def health_check():
+def health():
     """
-    Health check endpoint for Vercel, uptime monitors, and container orchestrators.
-    Verifies MySQL connectivity by executing a lightweight SELECT 1.
+    Shallow health check that does NOT touch the database.
+    Confirms that the Vercel serverless function, WSGI runtime, and Flask app are alive.
+    """
+    return jsonify({
+        'status': 'healthy',
+        'service': 'grocery-store-app',
+        'environment': 'vercel' if Config.IS_VERCEL else 'local',
+        'timestamp': int(time.time())
+    }), 200
+
+@app.route('/health/db')
+def health_db():
+    """
+    Deep health check that verifies MySQL database connectivity and reports diagnostics.
     """
     try:
         from db import get_db_cursor
         with get_db_cursor('manager') as (conn, cursor):
-            cursor.execute("SELECT 1 AS alive;")
+            cursor.execute("SELECT 1 AS alive, DATABASE() AS current_db, VERSION() AS mysql_version;")
             row = cursor.fetchone()
-            db_alive = bool(row and (row.get('alive') == 1 or row.get('1') == 1))
-        
+            
         return jsonify({
             'status': 'healthy',
-            'database': 'connected' if db_alive else 'unknown',
-            'database_name': Config.DB_NAME,
+            'database': 'connected',
+            'database_name': (row.get('current_db') if row else None) or Config.DB_NAME,
             'database_host': Config.DB_HOST,
+            'database_port': Config.DB_PORT,
+            'mysql_version': (row.get('mysql_version') if row else None) or 'unknown',
             'timestamp': int(time.time())
         }), 200
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error(f"Database health check failed: {e}")
         return jsonify({
             'status': 'unhealthy',
             'database': 'disconnected',
             'database_host': Config.DB_HOST,
+            'database_port': Config.DB_PORT,
+            'database_name': Config.DB_NAME,
             'error': str(e),
+            'troubleshooting': (
+                "1. Verify DB_HOST and DB_PORT in your Vercel Environment Variables. "
+                "2. Ensure cloud database security group allows 0.0.0.0/0. "
+                "3. Verify MANAGER_DB_USER and MANAGER_DB_PASS credentials. "
+                "4. If SSL is required by your provider, set DB_SSL_MODE=REQUIRED."
+            ),
             'timestamp': int(time.time())
         }), 503
 
@@ -97,6 +119,15 @@ def db_unreachable_error(error):
         '500.html',
         title="503 Service Unavailable - Database Unreachable",
         message="Unable to connect to the MySQL database server. If deploying to Vercel, verify your cloud DB host, port, credentials, and SSL settings in your Vercel Environment Variables."
+    ), 503
+
+@app.errorhandler(mysql.connector.Error)
+def mysql_engine_error(error):
+    logger.critical(f"MySQL Engine Error on {request.path}: {error}")
+    return render_template(
+        '500.html',
+        title="503 Service Unavailable - Database Error",
+        message=f"Database error ({error}). Please verify your cloud MySQL configuration and accessibility."
     ), 503
 
 @app.errorhandler(403)

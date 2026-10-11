@@ -41,6 +41,9 @@ def get_connection_params(role: str) -> dict:
     elif Config.DB_SSL_MODE:
         params['ssl_mode'] = Config.DB_SSL_MODE
 
+    if not Config.DB_SSL_VERIFY_CERT:
+        params['ssl_verify_cert'] = False
+
     return params
 
 def get_connection_pool(role: str):

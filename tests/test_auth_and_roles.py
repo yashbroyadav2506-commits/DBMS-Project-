@@ -39,10 +39,21 @@ def test_logout(client):
     assert res.status_code == 200
     assert b"logged out" in res.data.lower()
 
-def test_health_check_endpoint(client):
+def test_shallow_health_check_endpoint(client):
+    # Shallow check: must NOT touch database
     res = client.get('/health')
     assert res.status_code == 200
     data = res.get_json()
     assert data['status'] == 'healthy'
+    assert data['service'] == 'grocery-store-app'
+    assert 'timestamp' in data
+
+def test_deep_db_health_check_endpoint(client):
+    # Deep check: verifies database connectivity
+    res = client.get('/health/db')
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data['status'] == 'healthy'
     assert data['database'] == 'connected'
+    assert 'mysql_version' in data
     assert 'timestamp' in data

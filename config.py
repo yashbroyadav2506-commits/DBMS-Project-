@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
+from logger import logger
 
 load_dotenv()
 
@@ -14,21 +15,27 @@ class Config:
     )
 
     # Security & Sessions
-    # Fail fast if SECRET_KEY is missing in production / Vercel
+    # Robust fallback: Never crash during import on serverless platforms if SECRET_KEY is not yet set
     raw_secret = os.getenv('SECRET_KEY', '').strip()
     if not raw_secret:
         if IS_PRODUCTION:
-            raise RuntimeError(
-                "CRITICAL SECURITY CONFIGURATION ERROR: SECRET_KEY environment variable is missing! "
-                "You must set a secure SECRET_KEY in your Vercel project environment variables."
+            logger.warning(
+                "WARNING: SECRET_KEY is not set in environment variables! Using deployment fallback. "
+                "Please configure a strong SECRET_KEY in your Vercel Project Settings."
             )
-        SECRET_KEY = 'super-secret-grocery-db-key-2026-local-dev-only'
+        SECRET_KEY = (
+            os.getenv('VERCEL_DEPLOYMENT_ID', '').strip() or 
+            'super-secret-grocery-db-key-2026-fallback'
+        )
     else:
         SECRET_KEY = raw_secret
 
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    SESSION_COOKIE_SECURE = True if (IS_PRODUCTION or os.getenv('SESSION_COOKIE_SECURE', 'False').lower() in ('true', '1')) else False
+    # Use Secure cookies when in production or on Vercel unless explicitly disabled
+    SESSION_COOKIE_SECURE = (
+        True if (IS_PRODUCTION and os.getenv('SESSION_COOKIE_SECURE', 'True').lower() != 'false') else False
+    )
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=60)
     
     # Google OAuth 2.0 / OpenID Connect
@@ -45,15 +52,16 @@ class Config:
     DB_HOST = os.getenv('DB_HOST', 'localhost').strip()
     DB_PORT = int(os.getenv('DB_PORT', 3306))
     DB_NAME = os.getenv('DB_NAME', 'grocery_shop_db').strip()
-    # Serverless horizontal scaling requires a lean connection pool per lambda
+    # Serverless horizontal scaling requires a lean connection pool per lambda instance
     DB_POOL_SIZE = int(os.getenv('DB_POOL_SIZE', 2 if IS_VERCEL else 5))
     DB_CONNECT_TIMEOUT = int(os.getenv('DB_CONNECT_TIMEOUT', 10))
     DB_READ_TIMEOUT = int(os.getenv('DB_READ_TIMEOUT', 15))
     
-    # SSL Configuration for Cloud Databases (Aiven, PlanetScale, TiDB, AWS RDS)
+    # SSL Configuration for Cloud Databases (Aiven, PlanetScale, TiDB Cloud, AWS RDS)
     DB_SSL_CA = os.getenv('DB_SSL_CA', '').strip()
     DB_SSL_MODE = os.getenv('DB_SSL_MODE', '').strip()
     DB_SSL_DISABLED = os.getenv('DB_SSL_DISABLED', 'False').lower() in ('true', '1')
+    DB_SSL_VERIFY_CERT = os.getenv('DB_SSL_VERIFY_CERT', 'True').lower() not in ('false', '0')
     
     # Manager Credentials (Full DDL/DML access)
     MANAGER_DB_USER = os.getenv('MANAGER_DB_USER', 'shop_manager').strip()
