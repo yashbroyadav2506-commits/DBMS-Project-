@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In - Grocery Store DBMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center my-4">
+    <div class="col-md-6 col-lg-5 col-xl-4">
+        <div class="card card-custom p-4 shadow-sm">
+            <div class="text-center mb-4">
+                <div class="bg-warning bg-opacity-10 d-inline-block p-3 rounded-circle text-warning mb-2">
+                    <i class="bi bi-cart4 fs-1"></i>
+                </div>
+                <h3 class="fw-bold mb-1">Store Portal Sign In</h3>
+                <p class="text-muted small">Access your inventory and checkout point of sale</p>
+            </div>
+
+            <!-- Sign in with Google (OAuth 2.0 / OpenID Connect) -->
+            <div class="mb-3">
+                <a href="{{ url_for('auth.google_login', next=request.args.get('next')) }}" 
+                   class="btn btn-outline-dark w-100 py-2 d-flex align-items-center justify-content-center shadow-sm text-decoration-none">
+                    <svg class="me-2" width="20" height="20" viewBox="0 0 48 48">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.55 10.78l7.98-6.19z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                        <path fill="none" d="M0 0h48v48H0z"/>
+                    </svg>
+                    <span class="fw-semibold">Continue with Google</span>
+                </a>
+                {% if not google_configured %}
+                <div class="text-center">
+                    <small class="text-muted" style="font-size: 0.72rem;">
+                        <i class="bi bi-info-circle me-1"></i>Google OAuth keys can be set in <code>.env</code>
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- "Or" Divider -->
+            <div class="d-flex align-items-center my-3">
+                <hr class="flex-grow-1 my-0 border-secondary-subtle">
+                <span class="px-2 text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">or sign in with password</span>
+                <hr class="flex-grow-1 my-0 border-secondary-subtle">
+            </div>
+            
+            <!-- Standard Local Password Form (Fallback) -->
+            <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="mb-3">
+                    <label for="username" class="form-label fw-semibold">Username</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <input type="text" class="form-control" id="username" name="username" value="{{ username or '' }}" placeholder="e.g. manager_user" required autofocus>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="password" class="form-label fw-semibold">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-key"></i></span>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold shadow-sm">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                </button>
+            </form>
+
+            <div class="mt-4 p-3 bg-light bg-opacity-50 rounded border">
+                <h6 class="fw-bold text-secondary mb-2 small"><i class="bi bi-shield-check me-1"></i>Preset Demo Credentials:</h6>
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
+                    <span><strong class="text-danger">Manager:</strong> <code>manager_user</code></span>
+                    <span class="badge bg-secondary">manager123</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><strong class="text-primary">Clerk:</strong> <code>clerk_user</code></span>
+                    <span class="badge bg-secondary">clerk123</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

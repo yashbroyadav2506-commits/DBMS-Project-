@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}403 Access Denied - Grocery Store DBMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center my-5 text-center">
+    <div class="col-md-6">
+        <div class="card card-custom p-5 bg-white border-danger shadow">
+            <i class="bi bi-shield-slash text-danger display-1 mb-3"></i>
+            <h1 class="fw-bold text-danger">403 - Access Denied</h1>
+            <p class="lead text-muted">You do not have the required role privileges to access this restricted page.</p>
+            <p class="text-secondary small">
+                Logged in user role: <span class="badge bg-primary text-uppercase">{{ session.role }}</span><br>
+                Restricted pages (Add/Edit/Delete Product, Restock, Alter Schema) are reserved for <strong>Manager</strong> role.
+            </p>
+            <div class="mt-4">
+                <a href="{{ url_for('dashboard.index') }}" class="btn btn-dark me-2">
+                    <i class="bi bi-house me-1"></i>Back to Dashboard
+                </a>
+                <a href="{{ url_for('products.index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-box-seam me-1"></i>View Product Catalog
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

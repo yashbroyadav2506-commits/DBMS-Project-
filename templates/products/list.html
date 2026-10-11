@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Product Catalog ({{ total_count }} Items) - Grocery Store DBMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-box-seam me-2 text-primary"></i>Product Catalog</h2>
+        <p class="text-muted mb-0 small">Querying <code>Product_Details</code> View • <b>{{ total_count }}</b> Total Products</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('products.export_csv') }}" class="btn btn-outline-success btn-sm">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
+        </a>
+        {% if session.role == 'manager' %}
+        <a href="{{ url_for('products.restock_list') }}" class="btn btn-outline-warning btn-sm">
+            <i class="bi bi-list-check me-1"></i>Restock List
+        </a>
+        <a href="{{ url_for('products.restock') }}" class="btn btn-warning btn-sm">
+            <i class="bi bi-arrow-repeat me-1"></i>Restock (Procedure)
+        </a>
+        <a href="{{ url_for('products.add') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle me-1"></i>Add Product
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Search & Multi-Filter Bar -->
+<div class="card card-custom p-3 bg-white mb-4">
+    <form method="GET" action="{{ url_for('products.index') }}" class="row g-2 align-items-center">
+        <div class="col-md-3">
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" name="q" value="{{ search_query }}" placeholder="Search name, category, brand...">
+            </div>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" name="category">
+                <option value="">-- All Categories --</option>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" name="brand">
+                <option value="">-- All Brands --</option>
+                {% for b in brands %}
+                <option value="{{ b.brand_name }}" {% if brand_filter == b.brand_name %}selected{% endif %}>{{ b.brand_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" name="stock">
+                <option value="">-- All Stock Levels --</option>
+                <option value="low" {% if stock_status == 'low' %}selected{% endif %}>Low Stock (≤ Reorder)</option>
+                <option value="out" {% if stock_status == 'out' %}selected{% endif %}>Out of Stock (=0)</option>
+                <option value="ok" {% if stock_status == 'ok' %}selected{% endif %}>Healthy Stock (> Reorder)</option>
+            </select>
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>Filter</button>
+            <a href="{{ url_for('products.index') }}" class="btn btn-outline-secondary" title="Reset Filters"><i class="bi bi-arrow-counterclockwise"></i></a>
+        </div>
+
+        {% if session.role == 'manager' %}
+        <div class="col-12 mt-2">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="showInactiveCheck" name="show_inactive" value="1" {% if include_inactive %}checked{% endif %} onchange="this.form.submit()">
+                <label class="form-check-label small text-muted" for="showInactiveCheck">Show Soft-Deleted (Inactive) Products</label>
+            </div>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Product Table -->
+<div class="card card-custom p-4 bg-white mb-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>
+                        <a href="{{ url_for('products.index', q=search_query, category=category_filter, brand=brand_filter, stock=stock_status, sort_by='product_id', order='DESC' if sort_by=='product_id' and sort_order=='ASC' else 'ASC') }}" class="text-decoration-none text-dark">
+                            ID {% if sort_by=='product_id' %}<i class="bi bi-arrow-{{ 'up' if sort_order=='ASC' else 'down' }}"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{{ url_for('products.index', q=search_query, category=category_filter, brand=brand_filter, stock=stock_status, sort_by='product_name', order='DESC' if sort_by=='product_name' and sort_order=='ASC' else 'ASC') }}" class="text-decoration-none text-dark">
+                            Product Name {% if sort_by=='product_name' %}<i class="bi bi-arrow-{{ 'up' if sort_order=='ASC' else 'down' }}"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{{ url_for('products.index', q=search_query, category=category_filter, brand=brand_filter, stock=stock_status, sort_by='category', order='DESC' if sort_by=='category' and sort_order=='ASC' else 'ASC') }}" class="text-decoration-none text-dark">
+                            Category {% if sort_by=='category' %}<i class="bi bi-arrow-{{ 'up' if sort_order=='ASC' else 'down' }}"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{{ url_for('products.index', q=search_query, category=category_filter, brand=brand_filter, stock=stock_status, sort_by='price', order='DESC' if sort_by=='price' and sort_order=='ASC' else 'ASC') }}" class="text-decoration-none text-dark">
+                            Price {% if sort_by=='price' %}<i class="bi bi-arrow-{{ 'up' if sort_order=='ASC' else 'down' }}"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{{ url_for('products.index', q=search_query, category=category_filter, brand=brand_filter, stock=stock_status, sort_by='stock_qty', order='DESC' if sort_by=='stock_qty' and sort_order=='ASC' else 'ASC') }}" class="text-decoration-none text-dark">
+                            Stock Qty {% if sort_by=='stock_qty' %}<i class="bi bi-arrow-{{ 'up' if sort_order=='ASC' else 'down' }}"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>Brand</th>
+                    <th>Supplier</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in products %}
+                <tr class="{% if not p.is_active %}opacity-50 table-secondary{% endif %}">
+                    <td><strong>#{{ p.product_id }}</strong></td>
+                    <td>
+                        <span class="fw-bold">{{ p.product_name }}</span>
+                        {% if not p.is_active %}
+                        <span class="badge bg-secondary ms-1">Soft-Deleted</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge bg-light text-dark border">{{ p.category or 'General' }}</span></td>
+                    <td class="text-success fw-bold">₹{{ "%.2f"|format(p.price) }}</td>
+                    <td>
+                        <span class="fw-bold">{{ p.stock_qty }}</span>
+                        {% if p.stock_qty == 0 %}
+                        <span class="badge bg-danger ms-1">Out of Stock</span>
+                        {% elif p.stock_qty <= p.reorder_level %}
+                        <span class="badge bg-warning text-dark ms-1">Low (≤{{ p.reorder_level }})</span>
+                        {% else %}
+                        <span class="badge bg-success ms-1">OK</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ p.brand }}</td>
+                    <td>{{ p.supplier }}</td>
+                    <td class="text-end">
+                        {% if session.role == 'manager' %}
+                            <a href="{{ url_for('products.edit', product_id=p.product_id) }}" class="btn btn-sm btn-outline-primary" title="Edit Product">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{{ url_for('products.restock', product_id=p.product_id) }}" class="btn btn-sm btn-outline-warning" title="Restock Procedure">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </a>
+
+                            {% if p.is_active %}
+                            <!-- Soft Delete Button -->
+                            <form method="POST" action="{{ url_for('products.soft_delete', product_id=p.product_id) }}" class="d-inline" onsubmit="return confirm('Soft-delete {{ p.product_name }}? It will be hidden from catalog but preserved in orders.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Soft Delete (Deactivate)">
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <!-- Restore Button -->
+                            <form method="POST" action="{{ url_for('products.restore', product_id=p.product_id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-success" title="Restore to Active Catalog">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+
+                            <!-- Permanent Delete Button -->
+                            <form method="POST" action="{{ url_for('products.delete', product_id=p.product_id) }}" class="d-inline" onsubmit="return confirm('PERMANENTLY delete {{ p.product_name }} from MySQL? This cannot be undone.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Hard Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        {% else %}
+                            <span class="badge bg-light text-dark border"><i class="bi bi-lock me-1"></i>Read-only</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-2 d-block mb-2 text-secondary"></i>
+                        No products match your search or filter criteria.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Server-Side Pagination Controls -->
+    {% if total_pages > 1 %}
+    <nav class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+        <small class="text-muted">Page <b>{{ page }}</b> of <b>{{ total_pages }}</b> (Total: {{ total_count }} products)</small>
+        <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('products.index', page=page-1, q=search_query, category=category_filter, brand=brand_filter, stock=stock_status, sort_by=sort_by, order=sort_order, show_inactive='1' if include_inactive else '0') }}">Previous</a>
+            </li>
+            {% for p_num in range(1, total_pages + 1) %}
+                {% if p_num == page or (p_num >= page - 2 and p_num <= page + 2) or p_num == 1 or p_num == total_pages %}
+                    <li class="page-item {% if p_num == page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('products.index', page=p_num, q=search_query, category=category_filter, brand=brand_filter, stock=stock_status, sort_by=sort_by, order=sort_order, show_inactive='1' if include_inactive else '0') }}">{{ p_num }}</a>
+                    </li>
+                {% elif p_num == page - 3 or p_num == page + 3 %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+            <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('products.index', page=page+1, q=search_query, category=category_filter, brand=brand_filter, stock=stock_status, sort_by=sort_by, order=sort_order, show_inactive='1' if include_inactive else '0') }}">Next</a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

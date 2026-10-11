@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Tax Invoice #{{ order.order_id }} - Grocery Store DBMS{% endblock %}
+
+{% block extra_head %}
+<style>
+    .invoice-card {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        border: 1px solid #e2e8f0;
+        padding: 2.5rem;
+    }
+    @media print {
+        nav, footer, .no-print, .btn, button, .alert {
+            display: none !important;
+        }
+        body {
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-size: 11pt !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .main-container, .row, .col-lg-9 {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        .invoice-card {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            width: 100% !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        <!-- Action Toolbar -->
+        <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+            <a href="{{ url_for('orders.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back to Orders
+            </a>
+            <div class="d-flex gap-2">
+                <button onclick="window.print()" class="btn btn-outline-dark">
+                    <i class="bi bi-printer me-1"></i>Print Invoice
+                </button>
+                <a href="{{ url_for('orders.download_pdf', order_id=order.order_id) }}" class="btn btn-danger">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
+                </a>
+                {% if session.role == 'manager' and order.status != 'Cancelled' %}
+                <form method="POST" action="{{ url_for('orders.cancel', order_id=order.order_id) }}" class="d-inline" onsubmit="return confirm('Cancel Order #{{ order.order_id }}? This will execute sp_cancel_order and restore all item quantities back into inventory stock.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger">
+                        <i class="bi bi-x-circle me-1"></i>Cancel Order (Restore Stock)
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if order.status == 'Cancelled' %}
+        <div class="alert alert-danger mb-4 shadow-sm">
+            <i class="bi bi-exclamation-octagon-fill me-2 fs-5 align-middle"></i>
+            <strong>This order has been CANCELLED:</strong> All product quantities were safely returned to warehouse inventory stock via <code>sp_cancel_order</code>.
+        </div>
+        {% endif %}
+
+        <!-- Invoice Paper Card -->
+        <div class="invoice-card bg-white text-dark">
+            <div class="d-flex justify-content-between align-items-start border-bottom pb-4 mb-4">
+                <div>
+                    <h3 class="fw-bold mb-1 text-primary">GROCERY STORE DBMS</h3>
+                    <p class="text-muted small mb-0">Mini Project • Database Connectivity with Front End Tools</p>
+                    <small class="text-secondary">Official Computer Generated Tax Invoice</small>
+                </div>
+                <div class="text-end">
+                    <h4 class="fw-bold text-dark mb-1">INVOICE #{{ order.order_id }}</h4>
+                    <span class="badge {% if order.status == 'Cancelled' %}bg-danger{% else %}bg-success{% endif %} fs-6 mb-2">
+                        {{ order.status or 'Completed' }}
+                    </span>
+                    <div class="small text-muted">Date: <b>{{ order.order_date }}</b></div>
+                </div>
+            </div>
+
+            <!-- Customer & Payment Metadata -->
+            <div class="row g-3 mb-4">
+                <div class="col-sm-6">
+                    <div class="p-3 bg-light rounded border">
+                        <h6 class="fw-bold text-uppercase small text-secondary mb-2">Billed To (Customer):</h6>
+                        <h5 class="fw-bold mb-1">{{ order.customer_name }}</h5>
+                        <p class="mb-1 text-muted small"><i class="bi bi-telephone me-1"></i>Phone: {{ order.phone or 'Not Provided' }}</p>
+                        <p class="mb-0 text-muted small"><i class="bi bi-geo-alt me-1"></i>City: {{ order.city or 'Not Provided' }}</p>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="p-3 bg-light rounded border">
+                        <h6 class="fw-bold text-uppercase small text-secondary mb-2">Transaction Details:</h6>
+                        <p class="mb-1">Payment Mode: <strong class="badge bg-secondary">{{ order.payment_mode }}</strong></p>
+                        <p class="mb-1 text-muted small">Transaction ID: <code>TXN-{{ order.order_id }}-{{ (order.order_date|string).replace('-', '') }}</code></p>
+                        <p class="mb-0 text-muted small">Status: <b>{{ order.status or 'Completed' }}</b></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th>Product Description</th>
+                            <th>Category</th>
+                            <th class="text-center" style="width: 100px;">Quantity</th>
+                            <th class="text-end" style="width: 130px;">Unit Price</th>
+                            <th class="text-end" style="width: 140px;">Line Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                <strong>{{ item.product_name }}</strong>
+                                <small class="text-muted d-block">Item ID #{{ item.product_id }}</small>
+                            </td>
+                            <td><span class="badge bg-light text-dark border">{{ item.category or 'General' }}</span></td>
+                            <td class="text-center fw-semibold">{{ item.quantity }}</td>
+                            <td class="text-end">₹{{ "%.2f"|format(item.unit_price) }}</td>
+                            <td class="text-end fw-bold">₹{{ "%.2f"|format(item.line_total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold">Total Items Count:</td>
+                            <td class="text-center fw-bold">{{ total_quantity }}</td>
+                            <td class="text-end fw-bold">Subtotal:</td>
+                            <td class="text-end fw-bold">₹{{ "%.2f"|format(total_amount) }}</td>
+                        </tr>
+                        <tr class="table-success">
+                            <td colspan="5" class="text-end fw-bold fs-5">GRAND TOTAL:</td>
+                            <td class="text-end fw-bold fs-5 text-success">₹{{ "%.2f"|format(total_amount) }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="border-top pt-3 text-center text-muted small">
+                <p class="mb-1">Thank you for shopping with us!</p>
+                <small>This is a computer-generated tax receipt backed by MySQL 8.0 ACID Transaction Integrity.</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

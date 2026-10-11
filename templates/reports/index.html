@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Reports & Analytical Views - Grocery Store DBMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Reports & Database Views</h2>
+        <p class="text-muted mb-0 small">Analytical queries backed by MySQL Views, Aggregations, and Stored Procedures</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('reports.export_monthly_csv') }}" class="btn btn-outline-success btn-sm">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Monthly Sales CSV
+        </a>
+        <a href="{{ url_for('reports.export_customers_csv') }}" class="btn btn-outline-info btn-sm">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Customer Spending CSV
+        </a>
+    </div>
+</div>
+
+<!-- Nav Tabs -->
+<ul class="nav nav-pills mb-4 gap-2" id="reportTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-semibold" id="monthly-tab" data-bs-toggle="tab" data-bs-target="#monthlyView" type="button" role="tab">
+            <i class="bi bi-calendar3 me-1"></i>Monthly Sales View
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="customer-tab" data-bs-toggle="tab" data-bs-target="#customerView" type="button" role="tab">
+            <i class="bi bi-person-lines-fill me-1"></i>Customer Spending View
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="category-tab" data-bs-toggle="tab" data-bs-target="#categoryView" type="button" role="tab">
+            <i class="bi bi-grid-3x3-gap me-1"></i>Category Summary View
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="proc-tab" data-bs-toggle="tab" data-bs-target="#procView" type="button" role="tab">
+            <i class="bi bi-gear-wide-connected me-1"></i>sp_sales_report Procedure
+        </button>
+    </li>
+</ul>
+
+<!-- Tab Contents -->
+<div class="tab-content" id="reportTabsContent">
+    <!-- 1. Monthly Sales View -->
+    <div class="tab-pane fade show active" id="monthlyView" role="tabpanel">
+        <div class="card card-custom p-4 bg-white mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0"><code>Monthly_Sales_Summary</code> MySQL View</h5>
+                <a href="{{ url_for('reports.export_monthly_csv') }}" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-download me-1"></i>Export CSV
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Sales Month</th>
+                            <th class="text-center">Total Orders</th>
+                            <th class="text-center">Items Sold</th>
+                            <th class="text-end">Total Revenue</th>
+                            <th class="text-end">Average Order Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in monthly_sales %}
+                        <tr>
+                            <td><strong class="text-primary">{{ row.sales_month }}</strong></td>
+                            <td class="text-center fw-semibold">{{ row.total_orders }}</td>
+                            <td class="text-center">{{ row.total_items_sold }} units</td>
+                            <td class="text-end fw-bold text-success">₹{{ "%.2f"|format(row.total_revenue) }}</td>
+                            <td class="text-end fw-bold">₹{{ "%.2f"|format(row.avg_order_value) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">No monthly sales data found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Customer Order Summary View -->
+    <div class="tab-pane fade" id="customerView" role="tabpanel">
+        <div class="card card-custom p-4 bg-white mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0"><code>Customer_Order_Summary</code> MySQL View</h5>
+                <a href="{{ url_for('reports.export_customers_csv') }}" class="btn btn-sm btn-outline-info">
+                    <i class="bi bi-download me-1"></i>Export CSV
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Customer ID</th>
+                            <th>Customer Name</th>
+                            <th>Phone</th>
+                            <th>City</th>
+                            <th class="text-center">Completed Orders</th>
+                            <th class="text-end">Total Lifetime Spend</th>
+                            <th class="text-end">Last Order Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in customer_orders %}
+                        <tr>
+                            <td><strong>#{{ c.customer_id }}</strong></td>
+                            <td class="fw-bold text-dark">{{ c.customer_name }}</td>
+                            <td>{{ c.phone or 'N/A' }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ c.city or 'N/A' }}</span></td>
+                            <td class="text-center">{{ c.completed_orders }}</td>
+                            <td class="text-end fw-bold text-success">₹{{ "%.2f"|format(c.total_spent) }}</td>
+                            <td class="text-end text-muted">{{ c.last_order_date or 'None' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">No customer order data available.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Category Summary View -->
+    <div class="tab-pane fade" id="categoryView" role="tabpanel">
+        <div class="card card-custom p-4 bg-white mb-4">
+            <h5 class="fw-bold mb-3"><code>Category_Summary</code> MySQL View</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Category</th>
+                            <th class="text-center">Products Count</th>
+                            <th class="text-end">Average Price</th>
+                            <th class="text-end">Total Stock Units</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cat in category_summaries %}
+                        <tr>
+                            <td><span class="badge bg-secondary fs-6">{{ cat.category or 'General' }}</span></td>
+                            <td class="text-center fw-semibold">{{ cat.total_products }}</td>
+                            <td class="text-end">₹{{ "%.2f"|format(cat.avg_price) }}</td>
+                            <td class="text-end fw-bold text-primary">{{ cat.total_stock }} units</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Stored Procedure sp_sales_report -->
+    <div class="tab-pane fade" id="procView" role="tabpanel">
+        <div class="card card-custom p-4 bg-white mb-4">
+            <h5 class="fw-bold mb-2">Stored Procedure: <code>sp_sales_report(start_date, end_date)</code></h5>
+            <p class="text-muted small">Executes procedure parameterized with date bounds to compute transaction summary stats.</p>
+
+            <form method="GET" action="{{ url_for('reports.index') }}" class="row g-2 align-items-center mb-4">
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">Start Date</label>
+                    <input type="date" class="form-control" name="start_date" value="{{ start_date or '2024-01-01' }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold">End Date</label>
+                    <input type="date" class="form-control" name="end_date" value="{{ end_date or '2026-12-31' }}" required>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-warning w-100 fw-semibold">
+                        <i class="bi bi-play-circle me-1"></i>Run Procedure
+                    </button>
+                </div>
+            </form>
+
+            {% if proc_report %}
+            <div class="card p-3 bg-light border">
+                <h6 class="fw-bold text-success mb-3"><i class="bi bi-check-circle me-1"></i>Procedure Execution Results:</h6>
+                <div class="row g-3">
+                    <div class="col-sm-3">
+                        <span class="text-muted small">Total Orders:</span>
+                        <h4 class="fw-bold mb-0 text-dark">{{ proc_report.total_orders }}</h4>
+                    </div>
+                    <div class="col-sm-3">
+                        <span class="text-muted small">Distinct Customers:</span>
+                        <h4 class="fw-bold mb-0 text-dark">{{ proc_report.total_customers }}</h4>
+                    </div>
+                    <div class="col-sm-3">
+                        <span class="text-muted small">Items Sold:</span>
+                        <h4 class="fw-bold mb-0 text-dark">{{ proc_report.total_items_sold }}</h4>
+                    </div>
+                    <div class="col-sm-3">
+                        <span class="text-muted small">Total Period Revenue:</span>
+                        <h4 class="fw-bold mb-0 text-success">₹{{ "%.2f"|format(proc_report.total_revenue) }}</h4>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

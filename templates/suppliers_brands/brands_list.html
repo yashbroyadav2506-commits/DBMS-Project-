@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Brands Management - Grocery Store DBMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-tags me-2 text-primary"></i>Brands Management</h2>
+        <p class="text-muted mb-0 small">Product brand catalog classification (Manager Authorized)</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('suppliers_brands.suppliers_list') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-truck me-1"></i>Manage Suppliers
+        </a>
+        <a href="{{ url_for('suppliers_brands.add_brand') }}" class="btn btn-primary btn-sm fw-semibold">
+            <i class="bi bi-plus-circle me-1"></i>Add Brand
+        </a>
+    </div>
+</div>
+
+<div class="card card-custom p-4 bg-white mb-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Brand ID</th>
+                    <th>Brand Name</th>
+                    <th class="text-center">Assigned Products</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in brands %}
+                <tr>
+                    <td><strong>#{{ b.brand_id }}</strong></td>
+                    <td class="fw-bold text-dark">{{ b.brand_name }}</td>
+                    <td class="text-center">
+                        <span class="badge bg-light text-dark border">{{ b.product_count }} items</span>
+                    </td>
+                    <td class="text-end">
+                        <a href="{{ url_for('suppliers_brands.edit_brand', brand_id=b.brand_id) }}" class="btn btn-sm btn-outline-primary me-1" title="Edit Brand">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <form method="POST" action="{{ url_for('suppliers_brands.delete_brand', brand_id=b.brand_id) }}" class="d-inline" onsubmit="return confirm('Delete brand {{ b.brand_name }}?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Brand">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-5">No brands registered.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

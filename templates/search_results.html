@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Search Results for "{{ query }}" - Grocery Store DBMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h2 class="fw-bold mb-1"><i class="bi bi-search me-2 text-primary"></i>Global Search Results</h2>
+    <p class="text-muted mb-0 small">Query: "<b>{{ query }}</b>"</p>
+</div>
+
+<!-- Products Found -->
+<div class="card card-custom p-4 bg-white mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0"><i class="bi bi-box-seam me-2 text-primary"></i>Matching Products ({{ products|length }})</h5>
+        <a href="{{ url_for('products.index', q=query) }}" class="btn btn-sm btn-outline-primary">View in Catalog</a>
+    </div>
+    {% if products %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in products %}
+                <tr>
+                    <td>#{{ p.product_id }}</td>
+                    <td class="fw-bold">{{ p.product_name }}</td>
+                    <td><span class="badge bg-secondary">{{ p.category or 'General' }}</span></td>
+                    <td class="text-success fw-bold">₹{{ "%.2f"|format(p.price) }}</td>
+                    <td>{{ p.stock_qty }}</td>
+                    <td class="text-end">
+                        {% if session.role == 'manager' %}
+                        <a href="{{ url_for('products.edit', product_id=p.product_id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">No matching products found.</p>
+    {% endif %}
+</div>
+
+<!-- Customers Found -->
+<div class="card card-custom p-4 bg-white mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0"><i class="bi bi-people me-2 text-info"></i>Matching Customers ({{ customers|length }})</h5>
+        <a href="{{ url_for('customers.index', q=query) }}" class="btn btn-sm btn-outline-info">View in Customers</a>
+    </div>
+    {% if customers %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Customer Name</th>
+                    <th>Phone</th>
+                    <th>City</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in customers %}
+                <tr>
+                    <td>#{{ c.customer_id }}</td>
+                    <td class="fw-bold">{{ c.name }}</td>
+                    <td>{{ c.phone or 'N/A' }}</td>
+                    <td>{{ c.city or 'N/A' }}</td>
+                    <td class="text-end">
+                        <a href="{{ url_for('customers.order_history', customer_id=c.customer_id) }}" class="btn btn-sm btn-outline-secondary">History</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">No matching customers found.</p>
+    {% endif %}
+</div>
+
+<!-- Orders Found -->
+<div class="card card-custom p-4 bg-white mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0"><i class="bi bi-receipt me-2 text-success"></i>Matching Orders ({{ orders|length }})</h5>
+        <a href="{{ url_for('orders.index', q=query) }}" class="btn btn-sm btn-outline-success">View in Orders</a>
+    </div>
+    {% if orders %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Order #</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Payment</th>
+                    <th>Amount</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in orders %}
+                <tr>
+                    <td>#{{ o.order_id }}</td>
+                    <td>{{ o.customer_name }}</td>
+                    <td>{{ o.order_date }}</td>
+                    <td><span class="badge bg-secondary">{{ o.payment_mode }}</span></td>
+                    <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
+                    <td class="text-end">
+                        <a href="{{ url_for('orders.detail', order_id=o.order_id) }}" class="btn btn-sm btn-outline-primary">View Bill</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">No matching orders found.</p>
+    {% endif %}
+</div>
+{% endblock %}

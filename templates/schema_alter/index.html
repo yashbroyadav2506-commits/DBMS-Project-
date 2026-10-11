@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Schema Alteration - Grocery Store DBMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card card-custom p-4 bg-white shadow mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-3">
+                <h3 class="fw-bold mb-0 text-danger">
+                    <i class="bi bi-tools me-2"></i>Database Schema Modification (ALTER)
+                </h3>
+                <span class="badge bg-danger">Manager Role Only</span>
+            </div>
+
+            <div class="alert alert-warning small mb-4">
+                <i class="bi bi-shield-check me-1"></i>
+                <strong>Security Protection:</strong> To prevent SQL Injection, operations are restricted to pre-approved ALTER statements with strict table and column identifier whitelisting (Table: <code>product</code>, Columns: <code>discount_pct</code>, <code>reorder_level</code>).
+            </div>
+
+            <form method="POST" action="{{ url_for('schema_alter.index') }}" class="mb-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="mb-3">
+                    <label for="operation" class="form-label fw-bold">Select Pre-Approved ALTER Operation *</label>
+                    <select class="form-select form-select-lg" id="operation" name="operation" required>
+                        <option value="">-- Choose Schema Alteration Operation --</option>
+                        {% for key, info in operations.items() %}
+                        <option value="{{ key }}">{{ info.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-danger btn-lg px-4" onclick="return confirm('Are you sure you want to execute this ALTER TABLE DDL command?');">
+                    <i class="bi bi-lightning me-1"></i>Execute Schema Alteration
+                </button>
+            </form>
+
+            {% if executed_sql %}
+            <div class="alert alert-success p-3 mb-4">
+                <h6 class="fw-bold mb-1"><i class="bi bi-check-circle me-1"></i>Executed DDL Statement:</h6>
+                <pre class="mb-0 bg-dark text-warning p-2 rounded"><code>{{ executed_sql }}</code></pre>
+            </div>
+            {% endif %}
+
+            <!-- Describe Output Table -->
+            <h5 class="fw-bold border-bottom pb-2 mb-3">
+                <i class="bi bi-table me-2"></i>Current <code>DESCRIBE product;</code> Table Structure Output:
+            </h5>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Field Name</th>
+                            <th>Data Type</th>
+                            <th>Null Allowed</th>
+                            <th>Key</th>
+                            <th>Default Value</th>
+                            <th>Extra Attributes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for col in describe_output %}
+                        <tr {% if col.Field == 'discount_pct' %}class="table-warning fw-bold"{% endif %}>
+                            <td class="fw-bold">
+                                <code>{{ col.Field }}</code>
+                                {% if col.Field == 'discount_pct' %}
+                                <span class="badge bg-warning text-dark ms-1">Altered Column</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-info text-dark">{{ col.Type }}</span></td>
+                            <td>{{ col.Null }}</td>
+                            <td>{{ col.Key or '-' }}</td>
+                            <td>{{ col.Default if col.Default is not none else 'NULL' }}</td>
+                            <td>{{ col.Extra or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Order History: {{ customer.name }} - Grocery Store DBMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-clock-history me-2 text-primary"></i>Customer Order History</h2>
+        <p class="text-muted mb-0 small">Transaction records for <b>{{ customer.name }}</b> (Phone: {{ customer.phone or 'N/A' }}, City: {{ customer.city or 'N/A' }})</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('customers.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Back to Customers
+        </a>
+        <a href="{{ url_for('orders.place') }}" class="btn btn-primary btn-sm fw-semibold">
+            <i class="bi bi-cart-plus me-1"></i>New Order for Customer
+        </a>
+    </div>
+</div>
+
+<div class="card card-custom p-3 bg-light border mb-4">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <span class="text-muted small">Total Orders Completed:</span>
+            <h5 class="fw-bold mb-0 text-dark">{{ orders|length }} Orders</h5>
+        </div>
+        <div class="col-md-6 text-md-end">
+            <span class="text-muted small">Total Customer Lifetime Spend:</span>
+            <h4 class="fw-bold text-success mb-0">₹{{ "%.2f"|format(total_spent) }}</h4>
+        </div>
+    </div>
+</div>
+
+<div class="card card-custom p-4 bg-white mb-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Order #</th>
+                    <th>Date</th>
+                    <th>Payment Mode</th>
+                    <th>Status</th>
+                    <th>Total Items</th>
+                    <th>Order Total</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in orders %}
+                <tr class="{% if o.status == 'Cancelled' %}opacity-75 table-danger{% endif %}">
+                    <td><strong>#{{ o.order_id }}</strong></td>
+                    <td>{{ o.order_date }}</td>
+                    <td><span class="badge bg-secondary">{{ o.payment_mode }}</span></td>
+                    <td>
+                        {% if o.status == 'Cancelled' %}
+                        <span class="badge bg-danger">Cancelled</span>
+                        {% else %}
+                        <span class="badge bg-success">Completed</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ o.total_items }} items</td>
+                    <td class="fw-bold text-success">₹{{ "%.2f"|format(o.total_amount) }}</td>
+                    <td class="text-end">
+                        <a href="{{ url_for('orders.detail', order_id=o.order_id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> View Bill
+                        </a>
+                        <a href="{{ url_for('orders.download_pdf', order_id=o.order_id) }}" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-file-earmark-pdf"></i> PDF
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-2 d-block mb-2 text-secondary"></i>
+                        This customer has not placed any orders yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
