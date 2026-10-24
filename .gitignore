@@ -44,3 +44,6 @@ desktop.ini
 
 # SQL local backups
 sql/backups/*.sql
+
+.vercel
+.env*
