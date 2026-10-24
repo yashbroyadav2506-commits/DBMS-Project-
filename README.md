@@ -12,7 +12,7 @@ This production-grade web application connects a Python/Flask front-end to an ex
 - **Security:** `Flask-WTF` (CSRF Protection), `Flask-Limiter` (Lockout after 5 failed attempts), HttpOnly/SameSite session cookies, inactivity expiration
 - **Front-end:** Jinja2 templates + Bootstrap 5 + Bootstrap Icons + Chart.js + Dark/Light mode toggle (`localStorage`)
 - **Reporting & Exports:** `ReportLab` (PDF Invoices), Python `csv` (Catalog and Financial CSV exports)
-- **Testing:** `pytest` (17 automated unit and integration tests)
+- **Testing:** `pytest` (35 automated unit and integration tests, incl. Google OIDC)
 - **Migrations:** Versioned, idempotent migrations in `sql/migrations/` via `migrate.py`
 - **Logging & Observability:** Serverless-friendly `stdout` logging (cloud & container native) with rotating file backup utility (`backup.py`, `backup.bat`)
 - **Deployment:** Vercel serverless-ready with `vercel.json`, Werkzeug `ProxyFix`, edge static routing (`public/`), and `/health` probe

@@ -28,10 +28,19 @@ def init_oauth(app) -> OAuth:
         client_secret=client_secret,
         server_metadata_url=discovery_url,
         client_kwargs={
-            'scope': 'openid email profile'
+            'scope': 'openid email profile',
+            'response_type': 'code',
         }
     )
-    logger.info("Authlib Google OAuth OpenID Connect client registered.")
+    # Authlib generates/validates a per-session `state` and, because the `openid`
+    # scope is requested, an OIDC `nonce` for the authorization code flow.
+    if client_id and client_secret:
+        logger.info("Authlib Google OAuth OpenID Connect client registered (state + nonce protected).")
+    else:
+        logger.warning(
+            "Authlib Google client registered without credentials; Google routes will "
+            "return a friendly 'not configured' message until GOOGLE_CLIENT_ID/SECRET are set."
+        )
     return oauth
 
 def is_google_oauth_configured() -> bool:

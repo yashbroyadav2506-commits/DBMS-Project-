@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import timedelta
 from dotenv import load_dotenv
 from logger import logger
@@ -15,18 +16,24 @@ class Config:
     )
 
     # Security & Sessions
-    # Robust fallback: Never crash during import on serverless platforms if SECRET_KEY is not yet set
+    # Never use a hardcoded/predictable secret. If SECRET_KEY is absent we generate a
+    # strong ephemeral key so the app still starts, and warn loudly that sessions will
+    # not survive a restart until a persistent SECRET_KEY is configured.
     raw_secret = os.getenv('SECRET_KEY', '').strip()
     if not raw_secret:
         if IS_PRODUCTION:
-            logger.warning(
-                "WARNING: SECRET_KEY is not set in environment variables! Using deployment fallback. "
-                "Please configure a strong SECRET_KEY in your Vercel Project Settings."
+            logger.critical(
+                "SECRET_KEY is not set. Generating an EPHEMERAL random key; sessions will be "
+                "invalidated on every restart/cold start. Set SECRET_KEY in your environment "
+                "(Vercel Project Settings) to a value from: "
+                "python -c \"import secrets; print(secrets.token_hex(32))\""
             )
-        SECRET_KEY = (
-            os.getenv('VERCEL_DEPLOYMENT_ID', '').strip() or 
-            'super-secret-grocery-db-key-2026-fallback'
-        )
+        else:
+            logger.warning(
+                "SECRET_KEY is not set. Generating an EPHEMERAL random key for this process; "
+                "sessions will reset on restart. Add SECRET_KEY to .env for persistent sessions."
+            )
+        SECRET_KEY = secrets.token_hex(32)
     else:
         SECRET_KEY = raw_secret
 
@@ -43,10 +50,29 @@ class Config:
     GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '').strip()
     GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/auth/google/callback').strip()
     GOOGLE_DISCOVERY_URL = 'https://accounts.google.com/.well-known/openid-configuration'
-    
+
     # Access Control & Bootstrapping
-    ALLOWED_EMAIL_DOMAINS = [d.strip().lower() for d in os.getenv('ALLOWED_EMAIL_DOMAINS', '').split(',') if d.strip()]
+    # Accept both ALLOWED_EMAIL_DOMAIN (single) and ALLOWED_EMAIL_DOMAINS (comma-separated list).
+    _raw_allowed_domains = ",".join(filter(None, [
+        os.getenv('ALLOWED_EMAIL_DOMAIN', '').strip(),
+        os.getenv('ALLOWED_EMAIL_DOMAINS', '').strip(),
+    ]))
+    ALLOWED_EMAIL_DOMAINS = sorted({d.strip().lower() for d in _raw_allowed_domains.split(',') if d.strip()})
     INITIAL_MANAGER_EMAIL = os.getenv('INITIAL_MANAGER_EMAIL', '').strip().lower()
+
+    # Clear startup diagnostic so operators immediately know whether Google Sign-In is live.
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        _missing = [name for name, val in (
+            ('GOOGLE_CLIENT_ID', GOOGLE_CLIENT_ID),
+            ('GOOGLE_CLIENT_SECRET', GOOGLE_CLIENT_SECRET),
+        ) if not val]
+        logger.warning(
+            "Google Sign-In is DISABLED: missing " + ", ".join(_missing) + ". "
+            "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env to enable 'Sign in with Google'. "
+            "Local username/password login remains fully available."
+        )
+    else:
+        logger.info(f"Google Sign-In is ENABLED (redirect_uri={GOOGLE_REDIRECT_URI}).")
     
     # Database Settings (Serverless-Optimized)
     DB_HOST = os.getenv('DB_HOST', 'localhost').strip()

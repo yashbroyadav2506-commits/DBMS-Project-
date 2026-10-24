@@ -4,8 +4,10 @@ Reports blueprint providing analytical views, stored procedure reporting, and CS
 import io
 import csv
 import json
-from flask import Blueprint, render_template, request, session, Response
+import mysql.connector
+from flask import Blueprint, flash, render_template, request, session, Response
 from auth import login_required
+from logger import logger
 from services import report_service, product_service
 
 reports_bp = Blueprint('reports', __name__)
@@ -28,8 +30,9 @@ def index():
     if start_date and end_date:
         try:
             proc_report = report_service.get_sales_report_proc(start_date, end_date)
-        except Exception:
-            pass
+        except mysql.connector.Error as error:
+            logger.error(f"Stored procedure sp_sales_report failed: {error}")
+            flash("The stored procedure sales report could not be generated. Check the date range and database configuration.", "warning")
 
     return render_template(
         'reports/index.html',

@@ -6,6 +6,7 @@ import time
 from urllib.parse import urlparse
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
+from authlib.integrations.base_client.errors import MismatchingStateError, OAuthError
 from auth import login_required
 from db import get_db_cursor
 from services import admin_service
@@ -20,10 +21,35 @@ _failed_attempts = {}
 def is_safe_redirect_url(target: str) -> bool:
     """
     Validates that a redirect URL is local to prevent open redirect vulnerabilities.
+    Only internal, single-slash paths are allowed (no scheme, no protocol-relative
+    '//host', no '/\\' trick, no backslashes).
     """
     if not target:
         return False
-    return target.startswith('/') and not target.startswith('//') and not target.startswith('/\\')
+    if '\\' in target:
+        return False
+    if not target.startswith('/') or target.startswith('//'):
+        return False
+    # Reject any target carrying a scheme or netloc once parsed.
+    parsed = urlparse(target)
+    return not parsed.scheme and not parsed.netloc
+
+def get_allowed_email_domains() -> list:
+    """
+    Reads the allowed email domain list from config, accepting both the singular
+    ALLOWED_EMAIL_DOMAIN and plural ALLOWED_EMAIL_DOMAINS keys, given either as a
+    comma-separated string or a list.
+    """
+    values = []
+    for key in ('ALLOWED_EMAIL_DOMAINS', 'ALLOWED_EMAIL_DOMAIN'):
+        raw = current_app.config.get(key)
+        if not raw:
+            continue
+        if isinstance(raw, str):
+            values.extend(raw.split(','))
+        elif isinstance(raw, (list, tuple, set)):
+            values.extend(raw)
+    return sorted({v.strip().lower() for v in values if str(v).strip()})
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -108,9 +134,11 @@ def login():
 # ----------------- GOOGLE OAUTH 2.0 / OPENID CONNECT -----------------
 
 @auth_bp.route('/auth/google')
+@auth_bp.route('/auth/google/login')
 def google_login():
     """
     Initiates Google OAuth 2.0 / OpenID Connect authorization code flow.
+    Authlib attaches a per-session `state` and an OIDC `nonce` to the request.
     """
     if 'user_id' in session:
         return redirect(url_for('dashboard.index'))
@@ -119,12 +147,14 @@ def google_login():
         flash("Google Sign-In is not configured yet. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.", "warning")
         return redirect(url_for('auth.login'))
 
-    # Store safe next url
+    # Store safe next url (only internal paths, prevents open redirects after login)
     next_page = request.args.get('next')
     if is_safe_redirect_url(next_page):
         session['oauth_next'] = next_page
+    else:
+        session.pop('oauth_next', None)
 
-    redirect_uri = current_app.config.get('GOOGLE_REDIRECT_URI', url_for('auth.google_callback', _external=True))
+    redirect_uri = current_app.config.get('GOOGLE_REDIRECT_URI') or url_for('auth.google_callback', _external=True)
     return oauth.google.authorize_redirect(redirect_uri)
 
 @auth_bp.route('/auth/google/callback')
@@ -155,6 +185,30 @@ def google_callback():
                                    title='Authentication Failed',
                                    message="Unable to retrieve authorization credentials from Google. Please try again.",
                                    badge_class='danger')
+    except MismatchingStateError:
+        # Authlib validated the per-session `state`; a mismatch indicates CSRF,
+        # an expired session, or the flow being completed in another browser tab.
+        logger.warning(f"Google OAuth state mismatch for IP {client_ip} (possible CSRF / expired session).")
+        return render_template('auth/auth_status.html',
+                               status='state_mismatch',
+                               title='Sign-In Session Expired',
+                               message="Your sign-in session expired or the security check failed. Please return to the login page and try again.",
+                               badge_class='warning')
+    except OAuthError as e:
+        detail = str(e).lower()
+        if 'nonce' in detail:
+            logger.warning(f"Google OIDC nonce validation failed for IP {client_ip}: {e}")
+            return render_template('auth/auth_status.html',
+                                   status='nonce_mismatch',
+                                   title='Sign-In Verification Failed',
+                                   message="Google's identity response could not be verified (nonce mismatch). Please start the sign-in again.",
+                                   badge_class='warning')
+        logger.error(f"Google OAuth token exchange error: {e}")
+        return render_template('auth/auth_status.html',
+                               status='oauth_failure',
+                               title='Authentication Error',
+                               message="An unexpected error occurred while communicating with Google. Please try again later.",
+                               badge_class='danger')
     except Exception as e:
         logger.error(f"Google OAuth token exchange error: {e}")
         return render_template('auth/auth_status.html',
@@ -196,7 +250,7 @@ def google_callback():
                                badge_class='warning')
 
     # Rule 6: Optional domain restriction
-    allowed_domains = current_app.config.get('ALLOWED_EMAIL_DOMAINS', [])
+    allowed_domains = get_allowed_email_domains()
     if allowed_domains:
         domain = email.split('@')[-1].lower() if '@' in email else ''
         if domain not in allowed_domains:
@@ -240,6 +294,10 @@ def google_callback():
                                badge_class='danger')
 
     # Rule 3 & 8: Active matching user found -> log them in with stored role
+    # Capture the validated post-login redirect target BEFORE regenerating the session,
+    # otherwise session.clear() would discard it.
+    next_page = session.get('oauth_next')
+
     # Regenerate session to protect against session fixation
     session.clear()
     session['user_id'] = user['id']
@@ -255,7 +313,6 @@ def google_callback():
     admin_service.log_audit('app_users', 'LOGIN_GOOGLE', user['id'], None, f"Google login successful for {email} as {user['role']}", user['username'])
     flash(f"Welcome back, {session['full_name']}! Signed in via Google as {user['role'].upper()}.", "success")
 
-    next_page = session.pop('oauth_next', None)
     if is_safe_redirect_url(next_page):
         return redirect(next_page)
     return redirect(url_for('dashboard.index'))

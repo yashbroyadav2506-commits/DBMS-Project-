@@ -14,7 +14,8 @@
                 <p class="text-muted small">Access your inventory and checkout point of sale</p>
             </div>
 
-            <!-- Sign in with Google (OAuth 2.0 / OpenID Connect) -->
+            <!-- Sign in with Google (OAuth 2.0 / OpenID Connect) - only shown when configured -->
+            {% if google_configured %}
             <div class="mb-3">
                 <a href="{{ url_for('auth.google_login', next=request.args.get('next')) }}" 
                    class="btn btn-outline-dark w-100 py-2 d-flex align-items-center justify-content-center shadow-sm text-decoration-none">
@@ -27,13 +28,6 @@
                     </svg>
                     <span class="fw-semibold">Continue with Google</span>
                 </a>
-                {% if not google_configured %}
-                <div class="text-center">
-                    <small class="text-muted" style="font-size: 0.72rem;">
-                        <i class="bi bi-info-circle me-1"></i>Google OAuth keys can be set in <code>.env</code>
-                    </small>
-                </div>
-                {% endif %}
             </div>
 
             <!-- "Or" Divider -->
@@ -42,6 +36,13 @@
                 <span class="px-2 text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">or sign in with password</span>
                 <hr class="flex-grow-1 my-0 border-secondary-subtle">
             </div>
+            {% else %}
+            <div class="text-center mb-3">
+                <small class="text-muted" style="font-size: 0.72rem;">
+                    <i class="bi bi-info-circle me-1"></i>Google Sign-In is disabled. Set <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in <code>.env</code> to enable it.
+                </small>
+            </div>
+            {% endif %}
             
             <!-- Standard Local Password Form (Fallback) -->
             <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) }}">

@@ -4,9 +4,11 @@ authorization logic, access requests, domain restrictions, and safety rules.
 """
 from unittest.mock import patch
 import pytest
+from authlib.integrations.base_client.errors import MismatchingStateError
 from services.oauth_service import oauth
 from services import admin_service
 from db import get_db_cursor
+from blueprints.auth import is_safe_redirect_url
 from tests.conftest import login_manager, login_clerk
 
 def test_approved_clerk_google_login(client):
@@ -77,9 +79,13 @@ def test_unknown_email_creates_pending_request_and_gets_no_session(client):
         }
     }
 
-    # Clean up any prior test request
+    # Clean up any prior test request AND any stale user row, so this test is hermetic.
     with get_db_cursor('manager', commit=True) as (conn, cur):
         cur.execute("DELETE FROM access_requests WHERE email = %s;", (test_email,))
+        cur.execute(
+            "DELETE FROM app_users WHERE LOWER(email) = LOWER(%s) OR google_sub = %s;",
+            (test_email, 'unknown_sub_777')
+        )
 
     with patch.object(oauth.google, 'authorize_access_token', return_value=mock_token):
         res = client.get('/auth/google/callback', follow_redirects=False)
@@ -260,3 +266,129 @@ def test_manager_access_request_approval_workflow(client):
         with client.session_transaction() as sess:
             assert sess.get('email') == applicant_email
             assert sess.get('role') == 'clerk'
+
+def test_state_mismatch_is_rejected(client):
+    """
+    A mismatching OAuth `state` (CSRF / expired session) is rejected with no session.
+    """
+    with patch.object(oauth.google, 'authorize_access_token', side_effect=MismatchingStateError()):
+        res = client.get('/auth/google/callback', follow_redirects=True)
+        assert res.status_code == 200
+        assert b"Sign-In Session Expired" in res.data
+
+        with client.session_transaction() as sess:
+            assert 'user_id' not in sess
+
+def test_is_safe_redirect_url_blocks_external_targets():
+    """
+    Open-redirect guard: only internal, single-slash paths are allowed.
+    """
+    assert is_safe_redirect_url('/dashboard') is True
+    assert is_safe_redirect_url('/products?page=2') is True
+
+    for bad in ('', None, 'https://evil.example.com', 'http://evil.example.com/x',
+                '//evil.example.com', '/\\evil.example.com', '\\\\evil.example.com',
+                'javascript:alert(1)'):
+        assert is_safe_redirect_url(bad) is False, f"Should reject: {bad!r}"
+
+def test_open_redirect_next_is_not_followed_after_login(client):
+    """
+    A malicious external `next` stored before login must not be followed; fall back to dashboard.
+    """
+    mock_token = {
+        'userinfo': {
+            'sub': 'clerk_sub_test_001',
+            'email': 'clerk@grocerydb.local',
+            'email_verified': True,
+            'name': 'Counter Clerk',
+        }
+    }
+
+    with client.session_transaction() as sess:
+        sess['oauth_next'] = 'https://evil.example.com/steal'
+
+    with patch.object(oauth.google, 'authorize_access_token', return_value=mock_token):
+        res = client.get('/auth/google/callback')
+
+    assert res.status_code == 302
+    location = res.headers['Location']
+    assert 'evil.example.com' not in location
+    assert location.endswith('/dashboard')
+
+    with client.session_transaction() as sess:
+        assert sess.get('user_id') is not None
+
+def test_internal_next_is_followed_after_login(client):
+    """
+    A safe internal `next` target is honored after a successful Google login.
+    """
+    mock_token = {
+        'userinfo': {
+            'sub': 'clerk_sub_test_001',
+            'email': 'clerk@grocerydb.local',
+            'email_verified': True,
+            'name': 'Counter Clerk',
+        }
+    }
+
+    with client.session_transaction() as sess:
+        sess['oauth_next'] = '/products'
+
+    with patch.object(oauth.google, 'authorize_access_token', return_value=mock_token):
+        res = client.get('/auth/google/callback')
+
+    assert res.status_code == 302
+    assert res.headers['Location'].endswith('/products')
+
+def test_google_login_endpoint_starts_flow(client, app):
+    """
+    GET /auth/google/login initiates the flow and stores only a safe internal next target.
+    """
+    from flask import redirect as flask_redirect
+
+    original_id = app.config.get('GOOGLE_CLIENT_ID')
+    original_secret = app.config.get('GOOGLE_CLIENT_SECRET')
+    app.config['GOOGLE_CLIENT_ID'] = 'test-client-id.apps.googleusercontent.com'
+    app.config['GOOGLE_CLIENT_SECRET'] = 'test-secret'
+
+    def fake_authorize_redirect(redirect_uri, **kwargs):
+        return flask_redirect('https://accounts.google.com/o/oauth2/v2/auth?fake=1')
+
+    try:
+        with patch.object(oauth.google, 'authorize_redirect', side_effect=fake_authorize_redirect):
+            res = client.get('/auth/google/login?next=/products')
+            assert res.status_code == 302
+            assert 'accounts.google.com' in res.headers['Location']
+            with client.session_transaction() as sess:
+                assert sess.get('oauth_next') == '/products'
+
+        # An external next must NOT be stored in the session.
+        with patch.object(oauth.google, 'authorize_redirect', side_effect=fake_authorize_redirect):
+            client.get('/auth/google/login?next=https://evil.example.com')
+            with client.session_transaction() as sess:
+                assert 'oauth_next' not in sess
+    finally:
+        app.config['GOOGLE_CLIENT_ID'] = original_id
+        app.config['GOOGLE_CLIENT_SECRET'] = original_secret
+
+def test_google_button_visibility_follows_configuration(client, app):
+    """
+    The 'Sign in with Google' button is hidden when unconfigured and shown when configured.
+    """
+    original_id = app.config.get('GOOGLE_CLIENT_ID')
+    original_secret = app.config.get('GOOGLE_CLIENT_SECRET')
+    try:
+        app.config['GOOGLE_CLIENT_ID'] = ''
+        app.config['GOOGLE_CLIENT_SECRET'] = ''
+        hidden_res = client.get('/login')
+        assert hidden_res.status_code == 200
+        assert b"Continue with Google" not in hidden_res.data
+
+        app.config['GOOGLE_CLIENT_ID'] = 'test-client-id.apps.googleusercontent.com'
+        app.config['GOOGLE_CLIENT_SECRET'] = 'test-secret'
+        shown_res = client.get('/login')
+        assert shown_res.status_code == 200
+        assert b"Continue with Google" in shown_res.data
+    finally:
+        app.config['GOOGLE_CLIENT_ID'] = original_id
+        app.config['GOOGLE_CLIENT_SECRET'] = original_secret
