@@ -8,7 +8,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from werkzeug.security import check_password_hash, generate_password_hash
 from authlib.integrations.base_client.errors import MismatchingStateError, OAuthError
 from auth import login_required
-from db import get_db_cursor
+from db import get_db_cursor, DatabaseUnreachableError
+import mysql.connector
 from services import admin_service
 from services.oauth_service import oauth, is_google_oauth_configured
 from logger import logger
@@ -121,6 +122,13 @@ def login():
                     remaining_attempts = 5 - attempt_info['count']
                     flash(f"Invalid username or password. ({remaining_attempts} attempts remaining before lockout)", "danger")
 
+        except (DatabaseUnreachableError, mysql.connector.Error) as db_err:
+            logger.critical(f"Database connection error during login: {db_err}")
+            flash(
+                "Unable to connect to the MySQL database. If deployed on Vercel, please ensure your cloud MySQL database "
+                "(e.g. TiDB, Aiven, or AWS RDS) is configured in your Vercel Project Environment Variables (DB_HOST, DB_USER, DB_PASS).",
+                "danger"
+            )
         except Exception as e:
             logger.error(f"Error during login authentication: {e}")
             flash("An unexpected error occurred during login. Please try again.", "danger")
